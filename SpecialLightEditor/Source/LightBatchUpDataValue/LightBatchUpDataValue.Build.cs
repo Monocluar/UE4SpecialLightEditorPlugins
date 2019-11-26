@@ -47,7 +47,8 @@ public class LightBatchUpDataValue : ModuleRules
 			}
 			);
 		
-		
+
+
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]
 			{

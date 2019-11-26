@@ -19,6 +19,9 @@ ACurveLightRoute::ACurveLightRoute()
 
 	SplineComponent = CreateDefaultSubobject<USplineComponent>("Spline");
 	SplineComponent->SetupAttachment(RootComponent);
+
+	MinLightNumber = 2;
+	MaxLightNumber = 2;
 }
 
 // Called when the game starts or when spawned
@@ -26,6 +29,10 @@ void ACurveLightRoute::BeginPlay()
 {
 	Super::BeginPlay();
 	MyPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
+	if (SplineLightType == SplinePoint_Three)
+	{
+		CreatePointLightComponent(SplineComponent->GetNumberOfSplinePoints());
+	}
 
 }
 
@@ -33,27 +40,27 @@ void ACurveLightRoute::BeginPlay()
 void ACurveLightRoute::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (bIsGameEnable)
+	if (bIsGameEnable && SplineLightType == SplinePoint_Three || SplineLightType == SplinePoint_Four)
 	{
 		float Alpha = 0;
-		CreatePointLightComponent(GetAddPointLightIndex(FVector::ZeroVector, Alpha));
+		if (SplineLightType == SplinePoint_Three)
+		{
+			GetAddPointLightIndex(FVector::ZeroVector, Alpha);
+		}
+		else
+		{
+			CreatePointLightComponent(GetAddPointLightIndex(FVector::ZeroVector, Alpha));
+		}
+		
 		//float Alpha = GetEditorCameraAndCurveValue(Pos);
+
 
 		if (bIsEnableLightUpData)
 		{
-			if (!bIsFollowSpline)
+
+			for (int i = 0; i < PointLights.Num(); i++)
 			{
-				for (int i = 0; i < PointLights.Num(); i++)
-				{
-					SetPointLightParameter(Alpha, PointLights[i], i);
-				}
-			}
-			else
-			{
-				for (int i = 0; i < SplineComponent->GetNumberOfSplinePoints(); i++)
-				{
-					SetPointLightParameter(Alpha, PointLights[i], i);
-				}
+				SetPointLightParameter(Alpha, PointLights[i], i);
 			}
 
 		}
@@ -66,29 +73,87 @@ void ACurveLightRoute::OnEditorViewPos(FVector Pos)
 {
 	//UE_LOG(LogTemp, Warning, TEXT("%s"), *Pos.ToString());
 	float Alpha = 0;
-	CreatePointLightComponent(GetAddPointLightIndex(Pos, Alpha));
+	switch (SplineLightType)
+	{
+	case SplinePoint_One:
+		CreatePointLightComponent(SplineComponent->GetNumberOfSplinePoints());
+		break;
+	case SplinePoint_Two:
+		CreatePointLightComponent(MaxLightNumber);
+		break;
+	case SplinePoint_Three:
+		CreatePointLightComponent(SplineComponent->GetNumberOfSplinePoints());
+		GetAddPointLightIndex(Pos, Alpha);
+		break;
+	case SplinePoint_Four:
+		CreatePointLightComponent(GetAddPointLightIndex(Pos, Alpha));
+		break;
+
+	}
 	//float Alpha = GetEditorCameraAndCurveValue(Pos);
-	
-	if (bIsEnableLightUpData)
+	if (SplineLightType == SplinePoint_One || SplineLightType == SplinePoint_Two)
+	{
+		for (int i = 0; i < PointLights.Num(); i++)
+		{
+			UpDataPointLightComponent(PointLights[i], i, MaxCameraPosLightParameter);
+		}
+		return;
+	}
+	if (SplineLightType == SplinePoint_Three || SplineLightType == SplinePoint_Four)
 	{
 		for (int i = 0; i < PointLights.Num(); i++)
 		{
 			SetPointLightParameter(Alpha, PointLights[i], i);
 		}
 	}
-	bIsEnableLightUpData = !(Alpha == 1 || Alpha == 0);
+	
 }
 
 #if WITH_EDITOR
 void ACurveLightRoute::PreEditChange(UProperty* PropertyThatWillChange)
 {
-	if (bOldIsFollowSpline != bIsFollowSpline)
+	MaxCameraPos = FMath::Max(MaxCameraPos, MinCameraPos);
+
+}
+bool ACurveLightRoute::CanEditChange(const UProperty* InProperty) const
+{
+	if (InProperty)
 	{
-		bOldIsFollowSpline = bIsFollowSpline;
-		// 更新一次
-		bIsEnableLightUpData = true;
+		FString PropertyName = InProperty->GetName();
+		switch (SplineLightType)
+		{
+		case SplinePoint_One:
+			if (FCString::Strcmp(*PropertyName, TEXT("CameraPosValue")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MinCameraPos")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MinLightNumber")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MinCameraPosLightParameter")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MaxCameraPos")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MaxLightNumber")) == 0)
+			{
+				return false;
+			}
+			break;
+		case SplinePoint_Two:
+			if (FCString::Strcmp(*PropertyName, TEXT("MinCameraPos")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MinLightNumber")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MinCameraPosLightParameter")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MaxCameraPos")) == 0)
+			{
+				return false;
+			}
+			break;
+		case SplinePoint_Three:
+			if (FCString::Strcmp(*PropertyName, TEXT("MinLightNumber")) == 0
+				|| FCString::Strcmp(*PropertyName, TEXT("MaxLightNumber")) == 0)
+			{
+				return false;
+			}
+			break;
+		case SplinePoint_Four:
+			break;
+		}
 	}
-	UE_LOG(LogTemp, Warning, TEXT("1"));
+	return Super::CanEditChange(InProperty);
 }
 #endif
 
@@ -97,7 +162,7 @@ FTransform ACurveLightRoute::GetSplineLightComponentLocation(int Index, int Poin
 	float SplineLength = SplineComponent->GetSplineLength();
 	float Remainder;
 	float Distance = UKismetMathLibrary::FMod(SplineLength, PointNum, Remainder) * Index;
-	FVector SplineLocation = bIsFollowSpline 
+	FVector SplineLocation = SplineLightType == SplinePoint_One || SplineLightType == SplinePoint_Three
 		? SplineComponent->GetLocationAtSplinePoint(Index, ESplineCoordinateSpace::Local) 
 		: SplineComponent->GetLocationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::Local);
 	FRotator SplineRotation = SplineComponent->GetRotationAtDistanceAlongSpline(Distance, ESplineCoordinateSpace::Local);
@@ -132,13 +197,14 @@ float ACurveLightRoute::GetEditorCameraAndCurveValue(FVector ViewPos)
 
 int ACurveLightRoute::GetAddPointLightIndex(FVector ViewPos, float& Alpha)
 {
-	int LightNumberDir = FMath::Abs(MaxCameraPosLightParameter.LightNumber - MinCameraPosLightParameter.LightNumber);
+	int LightNumberDir = FMath::Abs(MaxLightNumber - MinLightNumber);
 	//float SliderScale = 0;
 	if (CameraPosValue)
 	{
 		Alpha = CameraPosValue->GetFloatValue(bIsGameEnable ? GetGameCameraAndCurveValue() : GetEditorCameraAndCurveValue(ViewPos));
 	}
-	int LightIndex = FMath::TruncToInt(FMath::Lerp(MaxCameraPosLightParameter.LightNumber, MinCameraPosLightParameter.LightNumber, Alpha));
+
+	int LightIndex = FMath::TruncToInt(FMath::Lerp(MaxLightNumber, MinLightNumber, Alpha));
 
 	return LightIndex;
 }
@@ -154,8 +220,12 @@ void ACurveLightRoute::CreatePointLightComponent(int Index)
 		{
 			for (int i = 0; i < Dir; i++)
 			{
-				PointLights[i]->DestroyComponent();
-				PointLights.RemoveAt(i);
+				if(PointLights.Num() > i)
+				{
+					PointLights[i]->DestroyComponent();
+					PointLights.RemoveAt(i);
+				}
+				
 			}
 		}
 		else
@@ -181,7 +251,6 @@ void ACurveLightRoute::SetPointLightParameter(float Alpha, UPointLightComponent*
 	FLightParameterSetting Max = MaxCameraPosLightParameter;
 	FLightParameterSetting Min = MinCameraPosLightParameter;
 	FLightParameterSetting LightParameter;
-	LightParameter.LightNumber = PointLights.Num() - 1;
 	LightParameter.LightIntensity = FMath::Lerp(Max.LightIntensity, Min.LightIntensity,Alpha);
 	LightParameter.LightColor = FMath::Lerp(Max.LightColor, Min.LightColor, Alpha);
 	LightParameter.LightRadius = FMath::Lerp(Max.LightRadius, Min.LightRadius, Alpha);
@@ -197,7 +266,7 @@ void ACurveLightRoute::UpDataPointLightComponent(UPointLightComponent* Component
 {
 	if (Component)
 	{
-		Component->SetRelativeTransform(this->GetSplineLightComponentLocation(Index, LightParameter.LightNumber, LightParameter.LightRotation));
+		Component->SetRelativeTransform(this->GetSplineLightComponentLocation(Index, PointLights.Num() - 1, LightParameter.LightRotation));
 		Component->SetIntensity(LightParameter.LightIntensity);
 		Component->SetLightColor(LightParameter.LightColor);
 		Component->SetSourceLength(LightParameter.SourceLength);

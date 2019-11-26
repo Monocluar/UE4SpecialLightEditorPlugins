@@ -11,14 +11,12 @@ class UCurveFloat;
 class USplineComponent;
 class UPointLightComponent;
 
+
+
 USTRUCT(BlueprintType)
 struct FLightParameterSetting
 {
 	GENERATED_BODY()
-
-	// 灯光个数
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = LightParameterSetting)
-	int LightNumber = 0;
 
 	// 光照强度
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = LightParameterSetting)
@@ -54,6 +52,20 @@ struct FLightParameterSetting
 
 };
 
+UENUM()
+enum ELightDataType
+{
+
+	/** 根据Spline线的点数生成灯光 */
+	SplinePoint_One UMETA(DisplayName = "点-光对等"),
+	/** 根据Spline路径数生成等距灯光 */
+	SplinePoint_Two UMETA(DisplayName = "线-光对等"),
+	/** 根据Spline线的点数生成灯光，并且根据相机和自身距离值改变参数 */
+	SplinePoint_Three UMETA(DisplayName = "点-光对等(LOD)"),
+	/** 根据Spline路径数生成等距灯光，并且根据相机和自身距离值改变参数 */
+	SplinePoint_Four UMETA(DisplayName = "线-光对等(LOD)")
+};
+
 UCLASS()
 class CURVEROUTECREATE_API ACurveLightRoute : public AEditorViewValue
 {
@@ -76,6 +88,7 @@ public:
 #if WITH_EDITOR
 	// 当编辑器参数改变时调用
 	virtual void PreEditChange(UProperty* PropertyThatWillChange) override;
+	virtual bool CanEditChange(const UProperty* InProperty) const override;
 #endif // WITH_EDITOR
 
 protected:
@@ -88,10 +101,6 @@ protected:
 
 protected:
 
-	// 灯光是否跟随样条线上的点（若灯光跟随样条线上点位置，则不会随着相机位置的改变而变化）
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BaseSetting")
-	bool bIsFollowSpline;
-
 	// 设置是否开启阴影（默认关闭阴影）
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BaseSetting")
 	bool bOpenShadow;
@@ -101,12 +110,15 @@ protected:
 	bool bOpenColorTemperature;
 
 	// 设置色温值
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BaseSetting", AdvancedDisplay, meta = (editcondition = "bOpenColorTemperature"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "BaseSetting", AdvancedDisplay, meta = (editcondition = "bOpenColorTemperature", UIMin = "1700", UIMax = "12000"))
 	float ColorTemperatureValue;
 
-	bool bOldIsFollowSpline;
 
 public:
+
+	// 灯光类型
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "LightSetting")
+	TEnumAsByte<enum ELightDataType> SplineLightType;
 
 	// 过度曲线
 	UPROPERTY(EditAnywhere, Category = "LightSetting")
@@ -116,6 +128,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LightSetting")
 	float MinCameraPos;
 
+	// 最小灯光数
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LightSetting", meta = (UIMin = "1"))
+	int MinLightNumber;
+
 	// 最小距离的灯光设置
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LightSetting")
 	FLightParameterSetting MinCameraPosLightParameter;
@@ -123,6 +139,10 @@ public:
 	// 最大相机距离物体位置
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LightSetting")
 	float MaxCameraPos;
+
+	// 最大灯光数
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LightSetting", meta = (UIMin = "1"))
+	int MaxLightNumber;
 
 	// 最大距离的灯光设置
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "LightSetting")

@@ -71,7 +71,6 @@ public class CurveRouteCreate : ModuleRules
 				// ... add other private include paths required here ...
 			}
 			);
-
 			PrivateDependencyModuleNames.AddRange(
 				new string[] {
 					"InputCore",
